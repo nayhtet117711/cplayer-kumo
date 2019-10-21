@@ -44,7 +44,7 @@ module.exports.addSong = (socket, socketId, socketData) => {
 
     }
     const tmpSongList = [...songQueue]
-    console.log(tmpSongList)
+    // console.log(tmpSongList)
     if(current.song!==null && current.song!==undefined)
         tmpSongList.unshift(current.song)
     
@@ -59,8 +59,10 @@ module.exports.getSongList = (socket, socketId, socketData) => {
     const tmpSongList = [...songQueue]
     if(current.song!==null && current.song!==undefined)
         tmpSongList.unshift(current.song )
-    console.log("tmpSongList, ", tmpSongList, current.song)
+    // console.log("tmpSongList, ", tmpSongList, current.song)
     socket.emit(SOCKET_EVENT, { route: routeList.SONG_LIST, songList: tmpSongList })
+
+    socket.emit(SOCKET_EVENT, { route: routeList.SONG_VOLUME, volume: current.volume })
 
 }
 
@@ -85,8 +87,17 @@ module.exports.videoEnd = (socket, socketId, socketData) => {
         tmpSongList.unshift(current.song)
     socket.emit(SOCKET_EVENT, { route: routeList.SONG_LIST, songList: tmpSongList })
 
-    console.log("tmpSongList: ", tmpSongList)
+    // console.log("tmpSongList: ", tmpSongList)
 
+}
+
+module.exports.videoVolumeChange = (socket, socketId, socketData) => {
+    const route = socketData.route
+    const data = socketData.data
+
+    current.volume = data.volume
+
+    socket.emit(SOCKET_EVENT, { route: routeList.SONG_VOLUME, volume: data.volume })
 }
 
 module.exports.videoPause = (socket, socketId, socketData) => {

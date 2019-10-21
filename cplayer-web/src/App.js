@@ -3,6 +3,7 @@ import socket from "socket.io-client"
 import YouTube from 'react-youtube';
 import queryString from "query-string"
 import moment from "moment"
+import { useCookies, withCookies, Cookies } from 'react-cookie';
 
 const routeList = {
 	ENTER_USER: "ENTER_USER",
@@ -11,7 +12,8 @@ const routeList = {
     CURRENT_SONG: "CURRENT_SONG",
     SONG_END: "SONG_END",
     SONG_PAUSE: "SONG_PAUSE",
-    SONG_NEXT: "SONG_NEXT"
+	SONG_NEXT: "SONG_NEXT",
+	SONG_VOLUME: "SONG_VOLUME"
 
 }
 
@@ -20,20 +22,29 @@ const youtube = "https://www.googleapis.com/youtube/v3/videos?"
 const key = "AIzaSyAy_xGAX-98yl0FQ8bC1dTCfgI23aLyWK4" 
 const part = "snippet"
 
+const USERNAME = "USERNAME"
+
 class App extends Component {
 
 	constructor(props) {
 		super(props)
+
+		const { cookies } = props;
+		const username = cookies.get(USERNAME)
+		// console.log("username: ", username)
+
 		this.state = {
-			username: "",
+			username: username ? username : "",
 			newUrl: "",
-			isInApp: false,
-			screen: false,
+			isInApp: username? true : false,
+			screen: (username!==undefined && username==="cplayer") ? true : false,
 			player: null,
 			songList: [],
-			currentSong: null
+			currentSong: null,
+			volume: 80
 		}
-		this.socket = socket.connect("http://192.168.100.44:3333") //192.168.100.44
+		this.socket = socket.connect("http://192.168.100.16:3333") //192.168.100.44
+
 	}
 
 	componentDidMount() {
@@ -55,7 +66,10 @@ class App extends Component {
 				break;
 			case routeList.SONG_PAUSE:
 				this.pauseSongFromSocket(data)
-				break;				
+				break;	
+			case routeList.SONG_VOLUME:
+				this.volumeChangeSongFromSocket(data)
+				break;			
 
 		}
 	}
@@ -74,24 +88,40 @@ class App extends Component {
 
 	getCurrentSongFromSocket = data => {
 		const { player } = this.state
-		console.log("currentSong:", data.currentSong)
+		// console.log("currentSong:", data.currentSong)
 		this.setState({ currentSong: data.currentSong!==undefined ? data.currentSong : null  })
 	}
 
 	pauseSongFromSocket = data => {
 
-		console.log("test132", data.currentSong)
+		// console.log("test132", data.currentSong)
 
 		this.setState({ currentSong: data.currentSong!==undefined ? data.currentSong : null  })
 
 		const { player } = this.state
 
-		console.log("player", player)
+		// console.log("player", player)
 		
 		if(player!==null && data.currentSong.pause)
 			player.pauseVideo()
 		else if(player!==null)
 			player.playVideo()
+		
+		// this.player
+		// console.log("currentSong:", data.currentSong)
+		// this.setState({ currentSong: data.currentSong })
+	}
+
+	volumeChangeSongFromSocket = data => {
+
+		// console.log(data)
+
+		this.setState({ volume: data.volume })
+
+		const { player } = this.state
+
+		if(player!==null)
+			player.setVolume(data.volume)
 		
 		// this.player
 		// console.log("currentSong:", data.currentSong)
@@ -110,6 +140,8 @@ class App extends Component {
 		const { username } = this.state
 		if (username.trim().length > 0) {
 			this.socket.emit(SOCKET_EVENT, { route: routeList.ENTER_USER, data: { username } })
+			const { cookies } = this.props;
+			cookies.set(USERNAME, username)
 		} else {
 			alert("Username shouldnt be empty!")
 		}
@@ -161,15 +193,28 @@ class App extends Component {
 	}
 
 	handlePauseSong = props => {
-		console.log("pause")
+		// console.log("pause")
 		const { username, currentSong } = this.state
 		this.socket.emit(SOCKET_EVENT, { route: routeList.SONG_PAUSE, data: { username } })
 	}
 
 	handleNextSong = props => {
-		console.log("next")
+		// console.log("next")
 		const { username, currentSong } = this.state
 		this.socket.emit(SOCKET_EVENT, { route: routeList.SONG_NEXT, data: { username } })
+	}
+
+	handleLogout = props => {
+		const { cookies } = this.props
+		cookies.remove(USERNAME)
+		this.setState({ username: "", isInApp: false })
+	}
+
+	handleVolumeChange = e => {
+		const { username } = this.state
+		this.setState({ volume: e.target.value })
+		this.socket.emit(SOCKET_EVENT, { route: routeList.SONG_VOLUME, data: { username, volume: e.target.value } })
+
 	}
 
 	render() {
@@ -188,8 +233,14 @@ class App extends Component {
 		return (
 			<div className="container">
 				<div className="row justify-content-center">
-					<div className="col-4 p-3">
+					<div className="col-12">
+						<div className="p-5 h3 text-center text-dark font-weight-bold">Welcome to the CPLayer</div>
+					</div>
+				</div>
+				<div className="row justify-content-center">
+					<div className="col-5 p-3">
 						<div className="p-2">
+							<label htmlFor ="" className="text-muted p-2">Enter username to enter the music room</label>
 							<input type="text" value={username} onChange={e => this.handleStateChange({ username: e.target.value })} className="form-control" placeholder="Enter a username" />
 						</div>
 						<div className="p-2">
@@ -202,25 +253,41 @@ class App extends Component {
 	}
 
 	renderUserHome = () => {
-		const { username, newUrl, songList, currentSong } = this.state
-		console.log("currentSong, songList ", currentSong, songList)
+		const { username, newUrl, songList, currentSong, volume } = this.state
+		// console.log("currentSong, songList ", currentSong, songList)
 		return (
 			<div className="container">
 				<div className="row justify-content-center">
 					<div className="col-12 p-3">
 						<div className="py-3 px-2 d-flex justify-content-end">
-							<span className="text-muted pr-3">USER:</span>
-							<span className="font-weight-bold h5">{username}</span>
+							<div className="p-2 d-flex flex-row">
+								{/* <span className="text-muted pr-3">USER:</span> */}
+								<span className="font-weight-bold h5 text-primary">{username} &#128100;</span>
+							</div>
+							<div className="p-2">
+								<button className="btn btn-sm btn-danger" onClick={this.handleLogout}>Logout</button>
+							</div>
 						</div>
 						<div className="py-3 px-2">
-							<div className="p-3 bg-secondary border rounded d-flex flex-row justify-content-between">
-								<div className="h5 text-light d-flex flex-column align-items-center my-auto">{currentSong!==null ? currentSong.title : "No Song"}</div>
+							<div className="p-3 bg-primary border rounded d-flex flex-row justify-content-between">
+								<div className="h6 text-light d-flex flex-column align-items-center my-auto">{currentSong!==null ? currentSong.title : "No Song"}</div>
 								<div className="d-flex flex-row">
-									{currentSong!==null && <div className="mx-2 p-1 bg-light text-secondary rounded" style={{ cursor: "pointer" }} onClick={this.handlePauseSong}>
-										{ currentSong.pause ? "Resume" : "Pause" }
+									{currentSong!==null &&<div className="d-flex flex-row">
+										<div className="d-flex flex-column justify-content-center">
+											<input type="range" min="0" max="100" value={volume} onChange={this.handleVolumeChange} className="form-control" />
+										</div>
+										<div className="d-flex flex-column justify-content-center" style={{ cursor: "default" }}>
+											<div className="" style={{ width: 80 }}>
+												<span className="px-2">&#128266;</span>
+												<span className="px-1 h6 text-light" >{volume}</span>
+											</div>
+										</div>
 									</div>}
-									{currentSong!==null && <div className="mx-2 p-1 bg-light text-secondary rounded" style={{ cursor: "pointer" }} onClick={this.handleNextSong}>
-										Next
+									{currentSong!==null && <div className="mx-2 my-auto p-1 text-secondary rounded h3" style={{ cursor: "pointer" }} onClick={this.handlePauseSong}>
+										{ currentSong.pause ? <span>&#x23EF;</span> : <span>&#x23f8;</span> }
+									</div>}
+									{currentSong!==null && <div className="mx-2 my-auto p-1 text-secondary rounded h3" style={{ cursor: "pointer" }} onClick={this.handleNextSong}>
+										&#x23E9;
 									</div>}
 								</div>
 							</div>	
@@ -242,7 +309,8 @@ class App extends Component {
 										(
 											<div key={k} className="list-group-item d-flex flex-row justify-content-between">
 												<div className="" style={{ cursor: "default" }}>{ v.title }</div>
-												<div className="" style={{ cursor: "default" }}>{ moment(v.time, "YYYY-MM-DDTHH:mm:ss").format("HH:mm:ss a")}</div>
+												<div className="text-primary" style={{ cursor: "default" }}>{ v.username===username? "ME" : v.username }<span className="px-2">&#128100;</span></div>
+												{/* <div className="" style={{ cursor: "default" }}>{ moment(v.time, "YYYY-MM-DDTHH:mm:ss").format("HH:mm:ss a")}</div> */}
 											</div>
 										)
 									)
@@ -260,7 +328,7 @@ class App extends Component {
 
 		const song = currentSong===null ? {} : currentSong
 
-		console.log("currentSong: ", currentSong)
+		// console.log("currentSong: ", currentSong)
 
 		const opts = {
 			height: '800',
@@ -304,7 +372,7 @@ class App extends Component {
 
 	onVideoEnd = event => {
 		this.socket.emit(SOCKET_EVENT, { route: routeList.SONG_END, username: this.state.username, data: null })
-		console.log("End ")
+		// console.log("End ")
 	
 	}
 
@@ -316,4 +384,4 @@ class App extends Component {
 
 }
 
-export default App;
+export default withCookies(App);

@@ -1,7 +1,7 @@
 
 const io = require('socket.io')(3333);
 const { SOCKET_EVENT, routeList, userData, songQueue, current } = require("./data")
-const { enterUser, addSong, getSongList, getCurrentSong, videoEnd, videoPause, videoNext } = require("./conroller")
+const { enterUser, addSong, getSongList, getCurrentSong, videoEnd, videoPause, videoNext, videoVolumeChange } = require("./conroller")
 
 io.on('connection', (socket) => {
 
@@ -46,6 +46,9 @@ const socketService = (socketId, data) => {
             console.log("check, ", current, data)
             if(data.data.username!==undefined && data.data.username!==null && current.song!==undefined && current.song!==null && data.data.username===current.song.username)
                 videoEnd(io.sockets, socketId, data)
+            break;
+        case routeList.SONG_VOLUME: 
+            videoVolumeChange(io.sockets, socketId, data)
             break;
 
     }
