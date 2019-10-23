@@ -43,7 +43,7 @@ class App extends Component {
 			currentSong: null,
 			volume: 80
 		}
-		this.socket = socket.connect("http://192.168.100.16:3333") //192.168.100.44
+		this.socket = socket.connect("http://192.168.100.26:3333") //192.168.100.44
 
 	}
 
@@ -148,8 +148,12 @@ class App extends Component {
 	}
 
 	handleAddSong = () => {
-		const { username, newUrl } = this.state
-		if (newUrl.trim().length > 0) {
+		const { username, newUrl, songList } = this.state
+		const currentIndex = songList.findIndex(v=> username===v.username)
+		
+		console.log(currentIndex, username, songList)
+		
+		if (newUrl.trim().length > 0 && currentIndex===-1) {
 			const urlArr = newUrl.split("?")
 			const urlString = urlArr.length>1 ? urlArr[1] : urlArr[0]
 			const url = queryString.parse(urlString)
@@ -188,14 +192,17 @@ class App extends Component {
 
 			
 		} else {
-			alert("Video url shouldnt be empty!")
+			if(currentIndex!==-1) alert("Only one song in list! :P")
+			else alert("Video url shouldnt be empty!")
 		}
 	}
 
 	handlePauseSong = props => {
 		// console.log("pause")
 		const { username, currentSong } = this.state
-		this.socket.emit(SOCKET_EVENT, { route: routeList.SONG_PAUSE, data: { username } })
+		if(username===currentSong.username){
+			this.socket.emit(SOCKET_EVENT, { route: routeList.SONG_PAUSE, data: { username } })
+		}
 	}
 
 	handleNextSong = props => {
@@ -211,9 +218,11 @@ class App extends Component {
 	}
 
 	handleVolumeChange = e => {
-		const { username } = this.state
-		this.setState({ volume: e.target.value })
-		this.socket.emit(SOCKET_EVENT, { route: routeList.SONG_VOLUME, data: { username, volume: e.target.value } })
+		const { username, currentSong } = this.state
+		if(username===currentSong.username){
+			this.setState({ volume: e.target.value })
+			this.socket.emit(SOCKET_EVENT, { route: routeList.SONG_VOLUME, data: { username, volume: e.target.value } })
+		}
 
 	}
 

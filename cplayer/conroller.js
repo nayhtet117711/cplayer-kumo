@@ -6,10 +6,36 @@ module.exports.enterUser = (socket, socketId, socketData) => {
 
     const userList = {...userData.userList}
 
-    const userNameList = Object.keys(userList)
+    const userNameList = [...Object.keys(userList), ...songQueue.map(v => v.username)]
+	if(current.song!==undefined && current.song!==null) userNameList.push(current.song.username)
     const alreadyExistIndex = userNameList.findIndex(uname => uname===data.username)
-
-    if(alreadyExistIndex===-1) {
+	
+	const userListAuth = [
+		"lucy",
+		"myintmyathein",
+		"shayne",
+		"maythu",
+		"thaenuwin",
+		"nayhtet",
+		"htookyaw",
+		"yinyin",
+		"hlaingminthein",
+		"ethical",
+		"khaingkhant",
+		"thuzarsein",
+		"heinhtet",
+		"kyawpyhokhant",
+		"mimi",
+		"thiri",
+		"nyuntnyunt",
+		"htinhtin",
+		"mike", 
+		"cplayer"
+	]
+	
+	const userIndex = userListAuth.findIndex(u => u===data.username)
+	
+    if(alreadyExistIndex===-1 && userIndex>-1) {
         userList[data.username] = socketId
         userData.userList = userList
         socket.connected[socketId].emit(SOCKET_EVENT, { 
