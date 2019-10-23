@@ -1,5 +1,25 @@
 const { SOCKET_EVENT, routeList, userData, songQueue, current } = require("./data")
 
+module.exports.logoutUser = (socket, socketId, socketData) => {
+    const route = socketData.route
+    const data = socketData.data
+
+    const songQueueNew = songQueue.filter(v => v.username!==data.username)
+    console.log(songQueue, songQueueNew)
+
+    if(songQueueNew.length>-1) {
+        songQueue.splice(0, songQueue.length)
+        songQueue.push(...songQueueNew)
+        console.log(songQueueNew)
+        this.getSongList(socket, socketId, socketData)
+        if(current.song!==null && current.song!==undefined && current.song.username===data.username) {
+            this.videoEnd(socket, socketId, socketData)
+        }
+        delete userData.userList[data.username]
+    }
+
+}
+
 module.exports.enterUser = (socket, socketId, socketData) => {
     const route = socketData.route
     const data = socketData.data
@@ -34,7 +54,9 @@ module.exports.enterUser = (socket, socketId, socketData) => {
 	]
 	
 	const userIndex = userListAuth.findIndex(u => u===data.username)
-	
+    
+    // console.log(userIndex, alreadyExistIndex, userIndex>-1, userNameList, userListAuth)
+
     if(alreadyExistIndex===-1 && userIndex>-1) {
         userList[data.username] = socketId
         userData.userList = userList
@@ -46,10 +68,11 @@ module.exports.enterUser = (socket, socketId, socketData) => {
         
     } else {
         socket.connected[socketId].emit(SOCKET_EVENT, { 
-            success: true, 
+            success: false, 
             route, 
             screen: data.username==="cplayer" ? true : false,
-            message: "Username already exists!"})
+            message: alreadyExistIndex>-1 ? "Seriously, are you a hacker? No you can't. You are a fool trying to cheap! :P" : userIndex===-1 ? "You are not allowed to enter Kumo CPlayer Group!" : "Opps! Something went wrong!"
+        })
     }
 
 }
@@ -133,7 +156,7 @@ module.exports.videoPause = (socket, socketId, socketData) => {
     const screenUserId = userData.userList["cplayer"]
 
     // current.song = songQueue.shift()
-    current.song.pause = !current.song.pause
+    current.song.pause = !current.song.pause 
     socket.emit(SOCKET_EVENT, { route: routeList.SONG_PAUSE, currentSong: current.song })
     // if(socket.connected[screenUserId]!==undefined && socket.connected[screenUserId]!==null) {
     //     socket.connected[screenUserId].emit(SOCKET_EVENT, { route: routeList.SONG_PAUSE, currentSong: current.song })

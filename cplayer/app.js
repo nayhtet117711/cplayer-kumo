@@ -1,7 +1,7 @@
 
 const io = require('socket.io')(3333);
 const { SOCKET_EVENT, routeList, userData, songQueue, current } = require("./data")
-const { enterUser, addSong, getSongList, getCurrentSong, videoEnd, videoPause, videoNext, videoVolumeChange } = require("./conroller")
+const { enterUser, logoutUser, addSong, getSongList, getCurrentSong, videoEnd, videoPause, videoNext, videoVolumeChange } = require("./conroller")
 
 io.on('connection', (socket) => {
 
@@ -16,16 +16,19 @@ io.on('connection', (socket) => {
         console.log("list: ", userData.userList)
         console.log("username", username)
         if(username!==null)
-            delete userData.userList.username
+            delete userData.userList[username]
         // io.emit('user disconnected');
     });
 });
 
 const socketService = (socketId, data) => {
-    // console.log(io)
+    console.log(songQueue)
     switch (data.route) {
         case routeList.ENTER_USER:
             enterUser(io.sockets, socketId, data)
+            break;
+        case routeList.LOGOUT_USER:
+            logoutUser(io.sockets, socketId, data)
             break;
         case routeList.ADD_SONG:
             addSong(io.sockets, socketId, data)

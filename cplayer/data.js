@@ -17,7 +17,8 @@ module.exports.current = {
 module.exports.SOCKET_EVENT = "SOCKET_EVENT"
 
 module.exports.routeList = {
-	ENTER_USER: "ENTER_USER",
+    ENTER_USER: "ENTER_USER",
+    LOGOUT_USER: "LOGOUT_USER",
     ADD_SONG: "ADD_SONG",
     SONG_LIST: "SONG_LIST",
     CURRENT_SONG: "CURRENT_SONG",

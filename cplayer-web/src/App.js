@@ -7,6 +7,7 @@ import { useCookies, withCookies, Cookies } from 'react-cookie';
 
 const routeList = {
 	ENTER_USER: "ENTER_USER",
+	LOGOUT_USER: "LOGOUT_USER",
     ADD_SONG: "ADD_SONG",
     SONG_LIST: "SONG_LIST",
     CURRENT_SONG: "CURRENT_SONG",
@@ -20,7 +21,7 @@ const routeList = {
 const SOCKET_EVENT = "SOCKET_EVENT"
 const youtube = "https://www.googleapis.com/youtube/v3/videos?"
 const key = "AIzaSyAy_xGAX-98yl0FQ8bC1dTCfgI23aLyWK4" 
-const part = "snippet"
+const part = "snippet, contentDetails"
 
 const USERNAME = "USERNAME"
 
@@ -41,9 +42,11 @@ class App extends Component {
 			player: null,
 			songList: [],
 			currentSong: null,
-			volume: 80
+			volume: 80,
+			searchViewShow: false,
+			youtubeSongList: []
 		}
-		this.socket = socket.connect("http://192.168.100.26:3333") //192.168.100.44
+		this.socket = socket.connect("http://localhost:3333") //192.168.100.44
 
 	}
 
@@ -51,6 +54,22 @@ class App extends Component {
 		this.socket.on(SOCKET_EVENT, this.socketService)
 		this.socket.emit(SOCKET_EVENT, { route: routeList.SONG_LIST })
 		this.socket.emit(SOCKET_EVENT, { route: routeList.CURRENT_SONG, data: null })
+		this.fetchYoutubeSong()
+	}
+
+	fetchYoutubeSong = () => {
+		const query = {
+			key: key,
+			part: part,
+			chart: "mostPopular",
+			// id: url.v
+		}
+		fetch(`${youtube}${queryString.stringify(query)}`)
+			.then(res => res.json())
+			.then(res => {
+				console.log("you: ", res)
+			})
+			.catch(error => alert("Error: "+ error))
 	}
 
 	socketService = data => {
@@ -75,11 +94,13 @@ class App extends Component {
 	}
 
 	userEnterFromSocket = data => {
-		const { player } = this.state
+		const { player, username } = this.state
 		
 		if (data.success) {
 			this.handleStateChange({ isInApp: true, screen: data.screen })
-			// alert(data.message)
+			const { cookies } = this.props;
+			cookies.set(USERNAME, username)
+			alert(data.message)
 
 		} else {
 			alert(data.message)
@@ -140,8 +161,6 @@ class App extends Component {
 		const { username } = this.state
 		if (username.trim().length > 0) {
 			this.socket.emit(SOCKET_EVENT, { route: routeList.ENTER_USER, data: { username } })
-			const { cookies } = this.props;
-			cookies.set(USERNAME, username)
 		} else {
 			alert("Username shouldnt be empty!")
 		}
@@ -174,14 +193,20 @@ class App extends Component {
 					alert(res.error.message)
 					throw res.error
 				} else {
-					// console.log("okay")
+					// console.log("video info: ", res)
 					const video = {
 						username: username,
 						id: res.items[0].id,
-						title: res.items[0].snippet.title
+						title: res.items[0].snippet.title,
+						duration: res.items[0].contentDetails.duration.replace("PT", "").replace("M", ":").replace("S", "")
 					}
 					// console.log(video)
-					this.socket.emit(SOCKET_EVENT, { route: routeList.ADD_SONG, data: { username, video } })
+					if(parseInt( video.duration.split(":")[0])<=8){ 
+						this.socket.emit(SOCKET_EVENT, { route: routeList.ADD_SONG, data: { username, video } })
+
+					} else {
+						alert("Video must not be longer than 8 minutes!")
+					}
 					this.setState({ newUrl: "" })
 				}
 			})
@@ -213,6 +238,8 @@ class App extends Component {
 
 	handleLogout = props => {
 		const { cookies } = this.props
+		const { username } = this.state
+		this.socket.emit(SOCKET_EVENT, { route: routeList.LOGOUT_USER, data: { username } })
 		cookies.remove(USERNAME)
 		this.setState({ username: "", isInApp: false })
 	}
@@ -240,7 +267,7 @@ class App extends Component {
 	renderUserInput = () => {
 		const { username } = this.state
 		return (
-			<div className="container">
+			<div className="container-fluid">
 				<div className="row justify-content-center">
 					<div className="col-12">
 						<div className="p-5 h3 text-center text-dark font-weight-bold">Welcome to the CPLayer</div>
@@ -262,10 +289,10 @@ class App extends Component {
 	}
 
 	renderUserHome = () => {
-		const { username, newUrl, songList, currentSong, volume } = this.state
+		const { username, newUrl, songList, currentSong, volume, searchViewShow } = this.state
 		// console.log("currentSong, songList ", currentSong, songList)
 		return (
-			<div className="container">
+			<div className="container-fluid px-0">
 				<div className="row justify-content-center">
 					<div className="col-12 p-3">
 						<div className="py-3 px-2 d-flex justify-content-end">
@@ -277,9 +304,11 @@ class App extends Component {
 								<button className="btn btn-sm btn-danger" onClick={this.handleLogout}>Logout</button>
 							</div>
 						</div>
-						<div className="py-3 px-2">
-							<div className="p-3 bg-primary border rounded d-flex flex-row justify-content-between">
-								<div className="h6 text-light d-flex flex-column align-items-center my-auto">{currentSong!==null ? currentSong.title : "No Song"}</div>
+						<div className="py-2 px-2 bg-primary border rounded">
+							<div className="d-flex flex-row justify-content-between">
+								<div className="text-light d-flex flex-row justify-content-left align-items-center my-auto pl-2">
+									<div>{currentSong!==null ? currentSong.title : "No Song"}</div>
+								</div>
 								<div className="d-flex flex-row">
 									{currentSong!==null &&<div className="d-flex flex-row">
 										<div className="d-flex flex-column justify-content-center">
@@ -300,16 +329,32 @@ class App extends Component {
 									</div>}
 								</div>
 							</div>	
+							{ currentSong!==null && <div className="d-flex flex-row justify-content-between px-2 pt-1 text-light">
+								<div className="">
+									<img src="playingdisc.gif" alt="playing" styles="" width="40" className="pr-2"></img>{ currentSong.duration }
+								</div>
+								<div className="px-2">
+									{ currentSong.username }
+								</div>
+							</div>}
 						</div>
-						<div className="p-2">
-							<div className="input-group mb-3">
+						<div className="p-2 pt-3">
+							{ !searchViewShow && <div className="input-group mb-3">
 								<input type="text" value={newUrl} onChange={e => this.handleStateChange({ newUrl: e.target.value })} className="form-control" placeholder="Song URL (YouTube link)" aria-label="Recipient's username" aria-describedby="basic-addon2" />
 								<div className="input-group-append" style={{ cursor: "pointer" }} onClick={this.handleAddSong}>
 									<span className="input-group-text btn btn-primary" id="basic-addon2">Add Link</span>
 								</div>
-							</div>
+								{/* <div className="input-group-append" style={{ cursor: "pointer" }} onClick={this.handleAddSong}>
+									<span className="input-group-text btn btn-primary" id="basic-addon2">Browse</span>
+								</div> */}
+							</div>}
+							{ searchViewShow && <div style={{ position: "absolute", left: 20, right: 20, zIndex: 100 }}>
+								<div className="border border-primary rounded p-5" style={{ backgroundColor: "#e5e5ee"}}>
+
+								</div>
+							</div>}
 						</div>
-						<div className="p-2">
+						<div className="p-1">
 							<div className="p-2 text-secondary">SONG LIST</div>
 							<ul className="list-group">
 								{ songList.length===0 && <div className="p-2 text-muted text-center border border-top border-bottom-0 border-left-0 border-right-0">THERE IS NO SONG YET.</div>	}
@@ -351,6 +396,11 @@ class App extends Component {
 			<div className="container-fluid">
 				<div className="row justify-content-center">
 					<div className="col-12 p-0">
+						<div className="d-flex justify-content-end">
+							<div className="p-2">
+								<button className="btn btn-sm btn-danger" onClick={this.handleLogout}>Logout</button>
+							</div>
+						</div>
 
 						<div className="p-1 bg-secondary border border-dark" style={{ height: 810 }}>
 							<YouTube
