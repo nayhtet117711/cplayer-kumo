@@ -71,7 +71,7 @@ module.exports.enterUser = (socket, socketId, socketData) => {
             success: false, 
             route, 
             screen: data.username==="cplayer" ? true : false,
-            message: alreadyExistIndex>-1 ? "Seriously, are you a hacker? No you can't. You are a fool trying to cheap! :P" : userIndex===-1 ? "You are not allowed to enter Kumo CPlayer Group!" : "Opps! Something went wrong!"
+            message: alreadyExistIndex>-1 ? "Seriously, are you a hacker? No you can't. You are a fool trying to cheat! :P" : userIndex===-1 ? "You are not allowed to enter Kumo CPlayer Group!" : "Opps! Something went wrong!"
         })
     }
 

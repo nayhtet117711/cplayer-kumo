@@ -44,7 +44,9 @@ class App extends Component {
 			currentSong: null,
 			volume: 80,
 			searchViewShow: false,
-			youtubeSongList: []
+			youtubeSongList: [],
+			youtubeSearchText: "",
+			youtubeSearchLoading: false,
 		}
 		this.socket = socket.connect("http://localhost:3333") //192.168.100.44
 
@@ -54,22 +56,51 @@ class App extends Component {
 		this.socket.on(SOCKET_EVENT, this.socketService)
 		this.socket.emit(SOCKET_EVENT, { route: routeList.SONG_LIST })
 		this.socket.emit(SOCKET_EVENT, { route: routeList.CURRENT_SONG, data: null })
-		this.fetchYoutubeSong()
+		// this.fetchYoutubeSong("")
 	}
 
-	fetchYoutubeSong = () => {
+	handleYoutubeSearch = e => {
+		const { youtubeSearchText } = this.state
+		if(youtubeSearchText.length>5) {
+			// console.log("here1")
+			this.setState({ youtubeSearchLoading: true }, () => {
+				this.fetchYoutubeSong(youtubeSearchText)
+			} )
+		} else {
+			this.setState({ youtubeSearchLoading: false })
+			alert("Search keyword must be 5 characters at least!")
+		}
+	}
+
+	fetchYoutubeSong = keyword => {
 		const query = {
 			key: key,
-			part: part,
-			chart: "mostPopular",
+			part: "snippet",
+			maxResults: 10,
+			type: "video",
+			q: keyword
+			// chart: "mostPopular",
 			// id: url.v
 		}
-		fetch(`${youtube}${queryString.stringify(query)}`)
+		fetch(`https://www.googleapis.com/youtube/v3/search?${queryString.stringify(query)}`)
 			.then(res => res.json())
 			.then(res => {
-				console.log("you: ", res)
+				if(res.error!==undefined && res.error!==null) {
+					// console.log("error", res.error, res.error===undefined)
+					alert("Quta Limited. Please contact admin!")
+					console.log(res.error)
+					throw res.error.message
+				} else {
+					const results = res.items
+					// if(results.length>0) console.log("you: ", results[0])
+					this.setState({ youtubeSongList: results, youtubeSearchLoading: false })	
+				}							
+
 			})
-			.catch(error => alert("Error: "+ error))
+			.catch(error => {
+				console.log("Error: "+ error)
+				this.setState({ youtubeSearchLoading: false })
+			})
 	}
 
 	socketService = data => {
@@ -166,13 +197,56 @@ class App extends Component {
 		}
 	}
 
-	handleAddSong = () => {
+	youtubeSearchSelect = video => {
+		console.log({ video })
+		this.handleAddSong(video)
+	}
+
+	handleAddSong = (videoi) => {
 		const { username, newUrl, songList } = this.state
 		const currentIndex = songList.findIndex(v=> username===v.username)
 		
-		console.log(currentIndex, username, songList)
+		console.log(currentIndex, username, songList, videoi)
 		
-		if (newUrl.trim().length > 0 && currentIndex===-1) {
+		if(videoi!==undefined && currentIndex===-1) {
+			const query = {
+				key: key,
+				part: part,
+				id: videoi.id.videoId,
+			}
+			fetch(`${youtube}${queryString.stringify(query)}`)
+			.then(res => res.json())
+			.then(res => {
+				// console.log(res)
+				if(res.error!==undefined && res.error!==null) {
+					// console.log("error", res.error, res.error===undefined)
+					alert(res.error.message)
+					throw res.error
+				} else {
+					// console.log("video info: ", res)
+					const video = {
+						username: username,
+						id: res.items[0].id,
+						title: res.items[0].snippet.title,
+						duration: res.items[0].contentDetails.duration.replace("PT", "").replace("M", ":").replace("S", "")
+					}
+					// console.log(video)
+					if(parseInt( video.duration.split(":")[0])<=8){ 
+						this.socket.emit(SOCKET_EVENT, { route: routeList.ADD_SONG, data: { username, video } })
+
+					} else {
+						alert("Video must not be longer than 8 minutes!")
+					}
+					this.setState({ newUrl: "", searchViewShow: false })
+				}
+			})
+			.catch(errr => {
+				console.log(errr.message)
+				// alert("opps! something went wrong!")
+			})	
+		}
+		else if ((newUrl.trim().length > 0) && currentIndex===-1) {
+		
 			const urlArr = newUrl.split("?")
 			const urlString = urlArr.length>1 ? urlArr[1] : urlArr[0]
 			const url = queryString.parse(urlString)
@@ -207,14 +281,13 @@ class App extends Component {
 					} else {
 						alert("Video must not be longer than 8 minutes!")
 					}
-					this.setState({ newUrl: "" })
+					this.setState({ newUrl: "", searchViewShow: false })
 				}
 			})
 			.catch(errr => {
 				console.log(errr.message)
 				// alert("opps! something went wrong!")
-			})		
-
+			})	
 			
 		} else {
 			if(currentIndex!==-1) alert("Only one song in list! :P")
@@ -274,7 +347,7 @@ class App extends Component {
 					</div>
 				</div>
 				<div className="row justify-content-center">
-					<div className="col-5 p-3">
+					<div className="col-lg-5 col-md-12 p-3">
 						<div className="p-2">
 							<label htmlFor ="" className="text-muted p-2">Enter username to enter the music room</label>
 							<input type="text" value={username} onChange={e => this.handleStateChange({ username: e.target.value })} className="form-control" placeholder="Enter a username" />
@@ -289,7 +362,7 @@ class App extends Component {
 	}
 
 	renderUserHome = () => {
-		const { username, newUrl, songList, currentSong, volume, searchViewShow } = this.state
+		const { username, newUrl, songList, currentSong, volume, searchViewShow, youtubeSongList, youtubeSearchText, youtubeSearchLoading } = this.state
 		// console.log("currentSong, songList ", currentSong, songList)
 		return (
 			<div className="container-fluid px-0">
@@ -339,18 +412,62 @@ class App extends Component {
 							</div>}
 						</div>
 						<div className="p-2 pt-3">
-							{ !searchViewShow && <div className="input-group mb-3">
-								<input type="text" value={newUrl} onChange={e => this.handleStateChange({ newUrl: e.target.value })} className="form-control" placeholder="Song URL (YouTube link)" aria-label="Recipient's username" aria-describedby="basic-addon2" />
-								<div className="input-group-append" style={{ cursor: "pointer" }} onClick={this.handleAddSong}>
-									<span className="input-group-text btn btn-primary" id="basic-addon2">Add Link</span>
+							{ !searchViewShow && <div className="d-flex ">
+								<div className="input-group mb-3">
+									<input type="text" value={newUrl} onChange={e => this.handleStateChange({ newUrl: e.target.value })} className="form-control" placeholder="Song URL (YouTube link)" aria-label="Recipient's username" aria-describedby="basic-addon2" />
+									<div className="input-group-append" style={{ cursor: "pointer" }} onClick={this.handleAddSong}>
+										<span className="input-group-text btn btn-primary" id="basic-addon2">Add Link</span>
+									</div>
 								</div>
-								{/* <div className="input-group-append" style={{ cursor: "pointer" }} onClick={this.handleAddSong}>
-									<span className="input-group-text btn btn-primary" id="basic-addon2">Browse</span>
-								</div> */}
+								<div className="px-2" style={{ cursor: "pointer" }} onClick={()=>this.setState({ searchViewShow: true })}>
+									<span className="btn btn-primary" id="basic-addon2">Search from youtube</span>
+								</div>
 							</div>}
 							{ searchViewShow && <div style={{ position: "absolute", left: 20, right: 20, zIndex: 100 }}>
-								<div className="border border-primary rounded p-5" style={{ backgroundColor: "#e5e5ee"}}>
-
+								<div className="p-2">
+									<div className="container-fluid border">
+										<div className="row justify-content-center" style={{ backgroundColor: "#e5e5ef" }}>
+											<div className="col-sm-12 col-lg-6 py-3">
+												{/* <div className="pb-2 text-right">
+													<div className="btn btn-sm btn-danger" align="" style={{ cursor: "pointer" }} onClick={()=>this.setState({ searchViewShow: false })}>
+														<span className="" id="basic-addon2">Back to List</span>
+													</div>
+												</div> */}
+												<div className="d-flex flex-row">
+													<div className="input-group">
+														<input type="text" value={youtubeSearchText} onChange={e => this.setState({ youtubeSearchText: e.target.value })} className="form-control" placeholder="Enter song name keyword" aria-label="Recipient's username" aria-describedby="basic-addon2" />
+														<div className="input-group-append">
+															<button className="input-group-text btn btn-primary" onClick={this.handleYoutubeSearch}>Search</button>
+														</div>
+													</div>
+													<div className="mx-2" align="" style={{ cursor: "pointer" }} >
+														<span className="btn btn-danger " id="basic-addon2" onClick={()=>this.setState({ searchViewShow: false })}>Back to List</span>
+													</div>
+												</div>
+											</div>
+											{youtubeSearchLoading && <div className="h4 text-secondary font-weight-bold" style={{ position: "absolute", zIndex: 1000, top: "100%" }}>
+												Loading...
+											</div>}
+										</div>
+										<div className="row" style={{ backgroundColor: "#fafafe" }}> 
+											{ youtubeSongList.map((v, i) => {
+												const thumb = v.snippet.thumbnails.medium
+												const title = v.snippet.title
+												return (
+													<div key={i} className="col-sm-12 col-md-4 col-lg-3 col-xl-2 p-1 ">
+														<div key={i} className="flex-fill d-flex flex-column align-self-stretch rounded bg-white h-100 border shadow-lg" style={{ cursor: "pointer" }} onClick={()=>this.youtubeSearchSelect(v)}>
+															<div className="">
+																<img className="rounded-top" src={thumb.url}  alt="img" style={{ width: "100%"}}></img>
+															</div>
+															<div className="p-2">
+																{title}
+															</div>
+														</div>
+													</div>
+												)
+											}) }
+										</div>
+									</div>
 								</div>
 							</div>}
 						</div>
@@ -361,7 +478,7 @@ class App extends Component {
 								{ 
 									songList.map((v,k) =>
 										(
-											<div key={k} className="list-group-item d-flex flex-row justify-content-between">
+											<div key={k} className="list-group-item d-flex flex-row justify-content-between" >
 												<div className="" style={{ cursor: "default" }}>{ v.title }</div>
 												<div className="text-primary" style={{ cursor: "default" }}>{ v.username===username? "ME" : v.username }<span className="px-2">&#128100;</span></div>
 												{/* <div className="" style={{ cursor: "default" }}>{ moment(v.time, "YYYY-MM-DDTHH:mm:ss").format("HH:mm:ss a")}</div> */}
